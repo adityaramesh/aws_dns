@@ -20,7 +20,7 @@ daemon.
 # Obtaining Your Credentials
 
 To use the Route 53 API, you will need access to your AWS Account ID. You will
-alos need to create a secret access key, if you do not have one already. To do
+also need to create a secret access key, if you do not have one already. To do
 either of these things, navigate to [this webpage][security_credentials]. To
 obtain your AWS Account ID, open the "Account Identifiers" tab at the bottom of
 the page. Create an access key using the "Access Keys" tab. You may want to
@@ -53,8 +53,6 @@ installed, you will need to do so using `pip install`.
 
 - git clone
 - rake install
-
-# Sources
 
 [security_credentials]:
 https://console.aws.amazon.com/iam/home?#security_credential
