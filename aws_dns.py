@@ -1,9 +1,12 @@
+#! /opt/local/bin/python
+
 import json
 import logging
 import os
 import subprocess
 import time
 import urllib3
+from daemon3x import daemon
 from subprocess import Popen
 
 def get_set_ip(domain, zone_id):
@@ -103,11 +106,9 @@ def initialize(domain, zone_id):
 	return (set_ip, cur_ip, change_pending, change_id)
 
 def main():
-	if os.path.isfile("errors.log"):
-		os.rename("errors.log", "errors.log.old")
-	logging.basicConfig(filename="errors.log", filemode="w", level=logging.DEBUG)
+	logging.basicConfig(filename="/var/log/aws_ip_sync.log", filemode="w", level=logging.DEBUG)
 	try:
-		config = json.load(open("config.json"))
+		config = json.load(open("/etc/default/aws_ip_sync.json"))
 	except IOError as e:
 		logging.critical(str(e))
 		return
@@ -174,4 +175,9 @@ def main():
 			logging.info("Public IP has not changed.")
 			logging.info("Next check in 5 minutes.")
 
-run()
+class my_daemon(daemon):
+	def run(self):
+		main()
+
+d = my_daemon("/var/run/aws_ip_sync.pid")
+d.start()
