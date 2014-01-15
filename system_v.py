@@ -11,6 +11,7 @@ easier. It is based on the `daemon3x.py` file written by Chris Hager, and has
 been adapted to include the following additional features:
 
   - Creation and management of the PID file.
+  - Registration of the signal handler for `SIGTERM`.
   - Implementation of the required init script functions (consult the
     documentation for the inidividual member functions for more details).
   - Logging useful messages during the course of execution of the init script
@@ -27,12 +28,20 @@ of your target Linux distribution.
 
 The class derived from `service` must fulfill the following responsibilities:
 
-  - Subclassing the `service` class and overriding `run`.
+  - Subclassing the `service` class.
+  - Overriding `run` to implement the daemon.
+  - Optionally overriding `terminate` to respond to `SIGTERM` (e.g. closing file
+    descriptors).
   - Optionally overriding the `restart`, `reload`, and `force_reload` functions.
   - Optionally override `make_daemon`. You would want to do this if, for
-    example, the daemon is created by another program.
-  - Logging the initialization of the daemon in the `run` method, and calling
-    `self.log.log_status(True)` or `self.log.log_status(False)` appropriately.
+    example, the daemon is created by another program. In this case, the
+    `SIGTERM` handler and PID file management must be done by the external
+    program.
+  - Logging the initialization of the daemon in the `run` method.
+    - The daemon must call `self.log_status(True)` or `self.log_status(False)`
+      to report the initialization status.
+    - The daemon can optionally call `self.log_warning` and `self.log_failure`
+      to log error messages.
   - Parsing the configuration file (if any).
 
 [unix_notes]:
@@ -156,21 +165,23 @@ class service:
 	"""
 	Summary of parameters:
 
+          - `service_path` is the path to the service script.
 	  - `pidfile` is the path to the PID file.
 	  - `retry` is the number of times the daemon should be sent `SIGTERM`
 	    before being sent `SIGKILL`.
 	  - `sleep` is the number of seconds to sleep in between attempts to
 	    terminate the daemon gracefully.
 	"""
-	def __init__(self, pidfile, retry = 5, sleep = 0.1):
+	def __init__(self, service_path, pidfile, retry = 5, sleep = 0.1):
 		assert(retry >= 0)
 		assert(sleep  >= 0)
 
-		self.parent  = True
-		self.pidfile = pidfile
-		self.retry   = retry
-		self.sleep   = sleep
-		self.log     = logger("AWS DNS")
+		self.parent       = True
+		self.service_path = service_path
+		self.pidfile      = pidfile
+		self.retry        = retry
+		self.sleep        = sleep
+		self.log          = logger(os.path.basename(service_path))
 
 	"""
 	Spawns the daemon. The parent process stays alive until it ensures that
@@ -217,8 +228,11 @@ class service:
 			self.log.log_failure("Second fork failed: {0}.".format(e))
 			return False
 
-		# Write the daemon's PID to `pidfile`.
+		# Register the handlers.
+		signal.signal(signal.SIGTERM, self.terminate)
 		atexit.register(self.remove_pidfile)
+
+		# Write the daemon's PID to `pidfile`.
 		pid = str(os.getpid())
 		try:
 			with open(self.pidfile, "w+") as f:
@@ -353,6 +367,13 @@ class service:
 				self.log.log_warning("Failed to remove PID file: {0}".format(e))
 
 	"""
+	Called when `SIGTERM` is sent to the daemon. The derived class will
+	likely need to override this method.
+	"""
+	def terminate(self, signal, frame):
+		pass
+
+	"""
 	Used by the daemon to log warnings during initialization.
 	"""
 	def log_warning(self, msg):
@@ -440,18 +461,17 @@ class service:
 		# Attempt to terminate the process.
 		killed = False
 		try:
-			if self.retry > 0:
+			for _ in range(self.retry):
+				time.sleep(self.sleep)
 				os.kill(pid, signal.SIGTERM)
-				for _ in range(self.retry - 1):
-					time.sleep(self.sleep)
-					os.kill(pid, signal.SIGTERM)
 			killed = True
 			os.kill(pid, signal.SIGKILL)
 		except OSError as e:
-			self.log.log_status(False)
-			self.log.log_failure("Unable to stop service: {0}".format(e))
-			self.remove_pidfile()
-			return exit_failure
+			if "No such process" not in str(e.args):
+				self.log.log_status(False)
+				self.log.log_failure("Unable to stop service: {0}".format(e))
+				self.remove_pidfile()
+				return exit_failure
 
 		self.log.log_status(True)
 		if killed:
@@ -501,3 +521,10 @@ class service:
 	def status(self):
 		_, status = self.get_pid(check_status)
 		return status
+
+	"""
+	Prints usage information.
+	"""
+	def usage(self):
+		print(" * Usage: {0} {{start|stop|reload|force-reload|restart|try-restart|status}}.".
+			format(self.service_path))
