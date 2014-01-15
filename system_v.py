@@ -62,11 +62,19 @@ exit_failure   = 2
 Debian status codes. Happily, these agree with the LSB status codes.
 """
 
-status_running           = 0
-status_dead_with_pidfile = 1
-status_dead_with_lock    = 2
-status_dead              = 3
-status_unknown           = 4
+status_running              = 0
+status_stopped_with_pidfile = 1
+status_stopped_with_lock    = 2
+status_stopped              = 3
+status_unknown              = 4
+
+"""
+Action codes for the `service` class.
+"""
+
+check_running = 0
+check_stopped = 1
+check_status  = 2
 
 class logger:
 	"""
@@ -89,6 +97,12 @@ class logger:
 			self.cols = 80
 			self.margin = 73
 
+		# We need to flush the output stream after each logging
+		# operation. Otherwise, forking the parent process will
+		# duplicate the output buffer, causing two messages to be
+		# printed.
+		sys.stdout.flush()
+
 	"""
 	Used to log an action pertaining to a service, such as starting,
 	stopping, or reloading the configuration. This function call should be
@@ -96,10 +110,6 @@ class logger:
 	"""
 	def log_action(self, msg):
 		print(" * {0}".format(msg), end="")
-		# We need to flush the output stream after each logging
-		# operation. Otherwise, forking the parent process will
-		# duplicate the output buffer, causing two messages to be
-		# printed.
 		sys.stdout.flush()
 		self.fill = self.margin - 3 - len(msg)
 
@@ -209,7 +219,7 @@ class service:
 
 		# Write the daemon's PID to `pidfile`.
 		atexit.register(self.remove_pidfile)
-		pid = str(os.getpid)
+		pid = str(os.getpid())
 		try:
 			with open(self.pidfile, "w+") as f:
 				f.write(pid)
@@ -264,10 +274,14 @@ class service:
 				# Now we log any messages sent using the
 				# message pipes.
 				if self.failure_get in r:
-					for msg in os.read(self.failure_get, 512).decode("utf-8").split("\n"):
+					data = os.read(self.failure_get, 512).decode("utf-8")
+					# Skip the last element of the
+					# splitting, because it must be empty.
+					for msg in data.split("\n")[:-1]:
 						self.log.log_failure(msg)
 				if self.warning_get in r:
-					for msg in os.read(self.warning_get, 512).decode("utf-8").split("\n"):
+					data = os.read(self.warning_get, 512).decode("utf-8")
+					for msg in data.split("\n")[:-1]:
 						self.log.log_warning(msg)
 
 				self.close_pipes()
@@ -289,9 +303,11 @@ class service:
 	"""
 	Attempts to retrieve a PID from the PID file. If the PID in the PID file
 	corresponds to an existing process, the PID is returned. Otherwise, the
-	PID file is removed, and -1 is returned.
+	PID file is removed, and -1 is returned. The `action` parameter, which
+	is one of `check_running`, `check_stopped`, or `check_status`,
+	determines whether this function should log a `[fail]` status.
 	"""
-	def get_pid(self):
+	def get_pid(self, action):
 		Status = namedtuple("Status", ["pid", "status"])
 
 		if os.path.isfile(self.pidfile):
@@ -299,24 +315,31 @@ class service:
 				with open(self.pidfile) as f:
 					pid = int(f.read().strip())
 			except IOError as e:
+				if action == check_running:
+					self.log.log_status(False)
 				self.log.log_warning("Failed to read PID file: {0}".format(e))
 				return Status(-1, status_unknown)
 			except ValueError as e:
+				if action == check_running:
+					self.log.log_status(False)
 				self.log.log_warning("Invalid PID in PID file: {0}".format(e))
-				return Status(-1, status_dead_with_pidfile)
+				self.remove_pidfile()
+				return Status(-1, status_stopped_with_pidfile)
 		else:
-			return Status(-1, status_dead)
+			if action == check_running:
+				self.log.log_status(False)
+			return Status(-1, status_stopped)
 
 		try:
 			os.kill(pid, 0)
 		except OSError:
-			try:
-				os.remove(self.pidfile)
-			except OSError as e:
-				self.log.log_failure("Failed to remove old PID file.")
-				return Status(-1, status_dead_with_pidfile)
-			return Status(-1, status_dead)
+			if action == check_running:
+				self.log.log_status(False)
+			self.remove_pidfile()
+			return Status(-1, status_stopped)
 		else:
+			if action == check_stopped:
+				self.log.log_status(False)
 			return Status(pid, status_running)
 
 	"""
@@ -328,6 +351,33 @@ class service:
 				os.remove(self.pidfile)
 			except OSError as e:
 				self.log.log_warning("Failed to remove PID file: {0}".format(e))
+
+	"""
+	Used by the daemon to log warnings during initialization.
+	"""
+	def log_warning(self, msg):
+		if self.parent:
+			return
+		os.write(self.warning_put, bytes(msg + "\n", "utf-8"))
+
+	"""
+	Used by the daemon to log failures during initialization.
+	"""
+	def log_failure(self, msg):
+		if self.parent:
+			return
+		os.write(self.failure_put, bytes(msg + "\n", "utf-8"))
+
+	"""
+	Used by the daemon to log the initialization status.
+	"""
+	def log_status(self, success):
+		if self.parent:
+			return
+		if success:	
+			os.write(self.status_put, bytes("0", "utf-8"))
+		else:
+			os.write(self.status_put, bytes("1", "utf-8"))
 
 	"""
 	Starts the daemon. Only the parent returns from this function; the
@@ -346,9 +396,8 @@ class service:
 		self.log.log_action("Starting AWS DNS service.")
 
 		# Check if the service is already running.
-		(_, status) = self.get_pid()
-		if not (status == status_dead or status == status_dead_with_pidfile):
-			self.log.log_status(False)
+		(_, status) = self.get_pid(check_stopped)
+		if status == status_running:
 			return exit_no_action
 
 		success = self.make_daemon()
@@ -384,9 +433,8 @@ class service:
 	def stop(self):
 		self.log.log_action("Stopping AWS DNS service.")
 
-		(pid, status) = self.get_pid()
-		if status != status_running:
-			self.log.log_status(False)
+		(pid, status) = self.get_pid(check_running)
+		if not (status == status_running or status == status_unknown):
 			return exit_no_action
 
 		# Attempt to terminate the process.
@@ -426,7 +474,7 @@ class service:
 	Restarts the service if it is already running.
 	"""
 	def try_restart(self):
-		(_, status) = self.get_pid()
+		(_, status) = self.get_pid(check_status)
 		if status != status_running:
 			return exit_no_action
 		else:
@@ -451,5 +499,5 @@ class service:
 	Returns the status associated with the service.
 	"""
 	def status(self):
-		_, status = self.get_pid()
+		_, status = self.get_pid(check_status)
 		return status

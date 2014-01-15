@@ -10,11 +10,14 @@ class dummy_service(service):
 		super(dummy_service, self).__init__("/Users/aditya/projects/utility/aws_dns/dat/dummy.pid")
 
 	def run(self):
-		f = open("/Users/aditya/projects/utility/aws_dns/dat/test.txt", "w+")
-		os.write(self.status_put, bytes("0", "utf-8"))
-		#while True:
-		#	f.write("Poop")
-		#	time.sleep(1)
+		try:
+			f = open("/Users/aditya/projects/utility/aws_dns/dat/test.txt", "w+")
+			f.write("Poop\n")
+			f.close()
+			self.log_status(True)
+		except Exception as e:
+			self.log_failure(str(e))
+			self.log_status(False)
 
 s = dummy_service()
 
