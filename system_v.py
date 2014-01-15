@@ -81,9 +81,9 @@ status_unknown              = 4
 Action codes for the `service` class.
 """
 
-check_running = 0
-check_stopped = 1
-check_status  = 2
+assert_running = 0
+assert_stopped = 1
+assert_none    = 2
 
 class logger:
 	"""
@@ -317,11 +317,11 @@ class service:
 	"""
 	Attempts to retrieve a PID from the PID file. If the PID in the PID file
 	corresponds to an existing process, the PID is returned. Otherwise, the
-	PID file is removed, and -1 is returned. The `action` parameter, which
-	is one of `check_running`, `check_stopped`, or `check_status`,
-	determines whether this function should log a `[fail]` status.
+	PID file is removed, and -1 is returned. The `assertion` parameter,
+	which is one of `assert_running`, `assert_stopped`, or `assert_none`,
+	determines whether this function will log a status.
 	"""
-	def get_pid(self, action):
+	def get_pid(self, assertion):
 		Status = namedtuple("Status", ["pid", "status"])
 
 		if os.path.isfile(self.pidfile):
@@ -329,30 +329,30 @@ class service:
 				with open(self.pidfile) as f:
 					pid = int(f.read().strip())
 			except IOError as e:
-				if action == check_running:
+				if assertion == assert_running:
 					self.log.log_status(False)
 				self.log.log_warning("Failed to read PID file: {0}".format(e))
 				return Status(-1, status_unknown)
 			except ValueError as e:
-				if action == check_running:
+				if assertion == assert_running:
 					self.log.log_status(False)
 				self.log.log_warning("Invalid PID in PID file: {0}".format(e))
 				self.remove_pidfile()
 				return Status(-1, status_stopped_with_pidfile)
 		else:
-			if action == check_running:
+			if assertion == assert_running:
 				self.log.log_status(False)
 			return Status(-1, status_stopped)
 
 		try:
 			os.kill(pid, 0)
 		except OSError:
-			if action == check_running:
+			if assertion == assert_running:
 				self.log.log_status(False)
 			self.remove_pidfile()
 			return Status(-1, status_stopped)
 		else:
-			if action == check_stopped:
+			if assertion == assert_stopped:
 				self.log.log_status(False)
 			return Status(pid, status_running)
 
@@ -417,7 +417,7 @@ class service:
 		self.log.log_action("Starting AWS DNS service.")
 
 		# Check if the service is already running.
-		(_, status) = self.get_pid(check_stopped)
+		(_, status) = self.get_pid(assert_stopped)
 		if status == status_running:
 			return exit_no_action
 
@@ -454,7 +454,7 @@ class service:
 	def stop(self):
 		self.log.log_action("Stopping AWS DNS service.")
 
-		(pid, status) = self.get_pid(check_running)
+		(pid, status) = self.get_pid(assert_running)
 		if not (status == status_running or status == status_unknown):
 			return exit_no_action
 
@@ -462,8 +462,8 @@ class service:
 		killed = False
 		try:
 			for _ in range(self.retry):
-				time.sleep(self.sleep)
 				os.kill(pid, signal.SIGTERM)
+				time.sleep(self.sleep)
 			killed = True
 			os.kill(pid, signal.SIGKILL)
 		except OSError as e:
@@ -494,7 +494,7 @@ class service:
 	Restarts the service if it is already running.
 	"""
 	def try_restart(self):
-		(_, status) = self.get_pid(check_status)
+		(_, status) = self.get_pid(assert_none)
 		if status != status_running:
 			return exit_no_action
 		else:
@@ -519,7 +519,7 @@ class service:
 	Returns the status associated with the service.
 	"""
 	def status(self):
-		_, status = self.get_pid(check_status)
+		_, status = self.get_pid(assert_none)
 		return status
 
 	"""
