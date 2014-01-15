@@ -17,6 +17,10 @@ you to tie an SSH server behind a dynamic IP to a domain name like
 This rest of this document describes how to set up your machine to run the
 daemon.
 
+# TODO
+
+Write a minimal example using `system_v.py`.
+
 # Obtaining Your Credentials
 
 To use the Route 53 API, you will need access to your AWS Account ID. You will
