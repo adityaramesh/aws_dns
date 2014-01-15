@@ -19,7 +19,8 @@ daemon.
 
 # TODO
 
-Write a minimal example using `system_v.py`.
+  - Test `system_v.py`.
+  - Write a minimal example using `system_v.py`.
 
 # Obtaining Your Credentials
 

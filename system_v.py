@@ -29,6 +29,8 @@ The class derived from `service` must fulfill the following responsibilities:
 
   - Subclassing the `service` class and overriding `run`.
   - Optionally overriding the `restart`, `reload`, and `force_reload` functions.
+  - Optionally override `make_daemon`. You would want to do this if, for
+    example, the daemon is created by another program.
   - Logging the initialization of the daemon in the `run` method, and calling
     `self.log.log_status(True)` or `self.log.log_status(False)` appropriately.
   - Parsing the configuration file (if any).
@@ -43,9 +45,10 @@ import sys
 import time
 import atexit
 import signal
-import colorama
 import subprocess
+from colorama import Fore
 from collections import namedtuple
+from select import select
 
 """
 Debian exit codes. These do not agree with the LSB status codes.
@@ -93,6 +96,11 @@ class logger:
 	"""
 	def log_action(self, msg):
 		print(" * {0}".format(msg), end="")
+		# We need to flush the output stream after each logging
+		# operation. Otherwise, forking the parent process will
+		# duplicate the output buffer, causing two messages to be
+		# printed.
+		sys.stdout.flush()
 		self.fill = self.margin - 3 - len(msg)
 
 	"""
@@ -101,8 +109,10 @@ class logger:
 	def log_status(self, s):
 		if s:
 			print("\033[{0}C[ OK ]".format(self.fill))
+			sys.stdout.flush()
 		elif not s:
 			print("\033[{0}C[{1}fail{2}]".format(self.fill, Fore.RED, Fore.RESET))
+			sys.stdout.flush()
 
 	"""
 	Used to log progress pertaining to a service.
@@ -115,19 +125,22 @@ class logger:
 	Used to log a success message.
 	"""
 	def log_success(self, msg):
-		print("{0}: * {1}".format(service, msg))
+		print(" * {0}: {1}".format(self.service, msg))
+		sys.stdout.flush()
 
 	"""
 	Used to log a warning message.
 	"""
 	def log_warning(self, msg):
-		print("{0}: {1}*{2} {3}".format(service, Fore.YELLOW, Fore.RESET, msg))
+		print(" {0}*{1} {2}: {3}".format(Fore.YELLOW, Fore.RESET, self.service, msg))
+		sys.stdout.flush()
 
 	"""
 	Used to log a failure message.
 	"""
 	def log_failure(self, msg):
-		print("{0}: {1}*{2} {3}".format(service, Fore.RED, Fore.RESET, msg))
+		print(" {0}*{1} {2}: {3}".format(Fore.RED, Fore.RESET, self.service, msg))
+		sys.stdout.flush()
 
 class service:
 	"""
@@ -143,39 +156,43 @@ class service:
 		assert(retry >= 0)
 		assert(sleep  >= 0)
 
+		self.parent  = True
 		self.pidfile = pidfile
-		self.retry  = retry
+		self.retry   = retry
 		self.sleep   = sleep
 		self.log     = logger("AWS DNS")
 
 	"""
 	Spawns the daemon. The parent process stays alive until it ensures that
 	the daemon has successfully initialized and logs any error messages,
-	since the daemon has its standard streams redirected to `/dev/null`.
+	since the daemon has its standard streams redirected to `/dev/null`. If
+	the daemon was created successfully, the parent returns true; otherwise,
+	it returns false.
+	
+	The derived class should override this method if the daemon should be
+	created by other means; such a case is when the daemon is created by an
+	external program.
 	"""
-	def daemonize(self):
+	def make_daemon(self):
 		# Used to communicate warning messages.
-		self.warning_get, self.warning_put = os.pipe()
+		(self.warning_get, self.warning_put) = os.pipe()
 		# Used to communicate failure messages.
-		self.failure_get, self.failure_put = os.pipe()
+		(self.failure_get, self.failure_put) = os.pipe()
 		# Used to communicate the initialization status.
-		self.status_get, self.status_put = os.pipe()
-
-		# We need to be able to differentiate between the parent and
-		# child process when this function returns.
-		Status = namedtuple("Status", ["is_parent", "success"])
+		(self.status_get, self.status_put) = os.pipe()
 
 		try:
 			pid = os.fork()
 			# Have the parent process monitor the status of the
 			# daemon.
 			if pid > 0:
-				return Status(True, self.monitor_daemon())
+				return self.monitor_daemon()
 		except OSError as e:
-			log.log_status(False)
-			log.log_failure("First fork failed: {0}.".format(e))
-			return Status(True, False)
+			self.log.log_status(False)
+			self.log.log_failure("First fork failed: {0}.".format(e))
+			return False
 
+		self.parent = False
 		os.chdir("/")
 		os.setsid()
 		os.umask(0)
@@ -186,9 +203,9 @@ class service:
 			if pid > 0:
 				sys.exit(0)
 		except OSError as e:
-			log.log_status(False)
-			log.log_failure("Second fork failed: {0}.".format(e))
-			return Status(False, False)
+			self.log.log_status(False)
+			self.log.log_failure("Second fork failed: {0}.".format(e))
+			return False
 
 		# Write the daemon's PID to `pidfile`.
 		atexit.register(self.remove_pidfile)
@@ -197,9 +214,9 @@ class service:
 			with open(self.pidfile, "w+") as f:
 				f.write(pid)
 		except IOError as e:
-			log.log_status(False)
-			log.log_failure("Failed to write to PID file: {0}".format(e))
-			return Status(False, False)
+			self.log.log_status(False)
+			self.log.log_failure("Failed to write to PID file: {0}".format(e))
+			return False
 
 		# Flush remaining buffer contents.
 		sys.stdout.flush()
@@ -211,14 +228,14 @@ class service:
 			so = open(os.devnull, "a+")
 			se = open(os.devnull, "a+")
 		except IOError as e:
-			log.log_status(False)
-			log.log_failure("Failed to open `/dev/null`: {0}".format(e))
-			return Status(False, False)
+			self.log.log_status(False)
+			self.log.log_failure("Failed to open `/dev/null`: {0}".format(e))
+			return False
 
 		os.dup2(si.fileno(), sys.stdin.fileno())
 		os.dup2(so.fileno(), sys.stdout.fileno())
 		os.dup2(se.fileno(), sys.stderr.fileno())
-		return Status(False, True)
+		return True
 	
 	"""
 	When the parent process forks to create a daemon, it must wait until it
@@ -230,28 +247,28 @@ class service:
 		wlist = []
 		xlist = [self.warning_get, self.failure_get, self.status_get]
 		while True:
-			r, w, x = select.select(rlist, wlist, xlist)
+			r, w, x = select(rlist, wlist, xlist)
 			if len(x) != 0:
-				log.log_status(False)
-				log.log_failure("Error reading from pipe.")
+				self.log.log_status(False)
+				self.log.log_failure("Error reading from pipe.")
 				self.close_pipes()
 				return False
-			elif status_get in rlist:
+			elif self.status_get in r:
 				# We must log the status before the failure
 				# messages, because the `[ OK ]` or `[fail]`
 				# status needs to occur on the same line as the
 				# starting daemon message.
-				status = int(os.read(status_get, 1).decode("utf-8"))
-				log.log_status(status == exit_success)
+				status = int(os.read(self.status_get, 1).decode("utf-8"))
+				self.log.log_status(status == exit_success)
 
 				# Now we log any messages sent using the
 				# message pipes.
-				if failure_get in rlist:
-					for msg in os.read(failure_get, 512).decode("utf-8").split("\n"):
-						log.log_failure(msg)
-				if warning_get in rlist:
-					for msg in os.read(warning_get, 512).decode("utf-8").split("\n"):
-						log.log_warning(msg)
+				if self.failure_get in r:
+					for msg in os.read(self.failure_get, 512).decode("utf-8").split("\n"):
+						self.log.log_failure(msg)
+				if self.warning_get in r:
+					for msg in os.read(self.warning_get, 512).decode("utf-8").split("\n"):
+						self.log.log_warning(msg)
 
 				self.close_pipes()
 				return True
@@ -282,10 +299,10 @@ class service:
 				with open(self.pidfile) as f:
 					pid = int(f.read().strip())
 			except IOError as e:
-				log.log_warning("Failed to read PID file: {0}".format(e))
+				self.log.log_warning("Failed to read PID file: {0}".format(e))
 				return Status(-1, status_unknown)
 			except ValueError as e:
-				log.log_warning("Invalid PID in PID file: {0}".format(e))
+				self.log.log_warning("Invalid PID in PID file: {0}".format(e))
 				return Status(-1, status_dead_with_pidfile)
 		else:
 			return Status(-1, status_dead)
@@ -296,7 +313,7 @@ class service:
 			try:
 				os.remove(self.pidfile)
 			except OSError as e:
-				log.log_failure("Failed to remove old PID file.")
+				self.log.log_failure("Failed to remove old PID file.")
 				return Status(-1, status_dead_with_pidfile)
 			return Status(-1, status_dead)
 		else:
@@ -310,7 +327,7 @@ class service:
 			try:
 				os.remove(self.pidfile)
 			except OSError as e:
-				log.log_warning("Failed to remove PID file: {0}".format(e))
+				self.log.log_warning("Failed to remove PID file: {0}".format(e))
 
 	"""
 	Starts the daemon. Only the parent returns from this function; the
@@ -326,16 +343,16 @@ class service:
 	function and continues to log the initialization process.
 	"""
 	def start(self):
-		log.log_action("Starting AWS DNS service.")
+		self.log.log_action("Starting AWS DNS service.")
 
 		# Check if the service is already running.
 		(_, status) = self.get_pid()
 		if not (status == status_dead or status == status_dead_with_pidfile):
-			log.log_status(False)
+			self.log.log_status(False)
 			return exit_no_action
 
-		(is_parent, success) = self.daemonize()
-		if is_parent:
+		success = self.make_daemon()
+		if self.parent:
 			# Only the parent process should return from this
 			# function.
 			return exit_success if success else exit_failure
@@ -365,11 +382,11 @@ class service:
 	still returned, but a warning message is printed.
 	"""
 	def stop(self):
-		log.log_action("Stopping AWS DNS service.")
+		self.log.log_action("Stopping AWS DNS service.")
 
 		(pid, status) = self.get_pid()
 		if status != status_running:
-			log.log_status(False)
+			self.log.log_status(False)
 			return exit_no_action
 
 		# Attempt to terminate the process.
@@ -383,14 +400,14 @@ class service:
 			killed = True
 			os.kill(pid, signal.SIGKILL)
 		except OSError as e:
-			log.log_status(False)
-			log.log_failure("Unable to stop service: {0}".format(e))
+			self.log.log_status(False)
+			self.log.log_failure("Unable to stop service: {0}".format(e))
 			self.remove_pidfile()
 			return exit_failure
 
-		log.log_status(True)
+		self.log.log_status(True)
 		if killed:
-			log.log_warning("Service terminated via SIGKILL.")
+			self.log.log_warning("Service terminated via SIGKILL.")
 		self.remove_pidfile()
 		return exit_success
 
