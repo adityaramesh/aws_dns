@@ -19,8 +19,9 @@ daemon.
 
 # TODO
 
-  - Test `system_v.py`.
-  - Write a minimal example using `system_v.py`.
+  - Better exception handling.
+  - Use `RotatingFileHander` to limit the size of the log files.
+  - Make configuration parameter for sleep time.
 
 # Obtaining Your Credentials
 

@@ -1,43 +1,56 @@
 #! /usr/bin/env python
 
-import json
-import logging
 import os
-import subprocess
+import sys
 import time
+import logging
+import traceback
+import json
 import urllib3
-from daemon3x import daemon
-from subprocess import Popen
+from subprocess import Popen, PIPE
+
+sys.path.append("/Users/aditya/projects/utility/python_service")
+from system_v import service
+
+base_dir  = os.path.abspath(".")
+pidfile   = os.path.join(base_dir, "dat/aws_dns.pid")
+logfile   = os.path.join(base_dir, "dat/aws_dns.log")
+conf_file = os.path.join(base_dir, "dat/aws_dns.json")
+
+def get_json(cmd):
+	out, err = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()
+	if len(err) != 0:
+		logging.warning("Command {0} reported error: {1}".
+			format(cmd, err.decode("utf-8")))
+	return json.loads(out.decode("utf-8"))
 
 def get_set_ip(domain, zone_id):
-	out, err = Popen(
-		['aws', 'route53', 'list-resource-record-sets', '--hosted-zone-id', zone_id], 
-		stdout=subprocess.PIPE, stderr=subprocess.PIPE
-	).communicate()
-	sets = json.loads(out.decode("utf-8"))["ResourceRecordSets"]
-	l = list(filter(lambda r : r["Type"] == "A" and r["Name"] == domain, sets))
+	res = get_json(['aws', 'route53', 'list-resource-record-sets', '--hosted-zone-id', zone_id])
+	sets = res["ResourceRecordSets"]
+	try:
+		l = list(filter(lambda r: r["Type"] == "A" and r["Name"] == domain, sets))
+	except KeyError as e:
+		raise Exception("No key {0} in record sets: {1}".format(e.args[0], sets))
+
 	if len(l) == 0:
-		return None
-	else:
-		if len(l) > 1:
-			logging.warning("Multiple A records match domain: using first match.")
-		addresses = list(filter(lambda r : "Value" in r, l[0]["ResourceRecords"]))
-		if len(addresses) == 0:
-			logging.critical("Matching A record has no address value.")
-		elif len(addresses) > 1:
-			logging.warning("Matching A record has multiple address values.")
-			logging.warning("Only the first one will be considered.")
-		return addresses[0]["Value"]
+		raise Exception("No matching A record in response: {0}".format(sets))
+	elif len(l) > 1:
+		logging.warning("Multiple A records match domain: using first match.")
+
+	addresses = list(filter(lambda r: "Value" in r, l[0]["ResourceRecords"]))
+	if len(addresses) == 0:
+		logging.warning("Matching A record has no address value.")
+	elif len(addresses) > 1:
+		logging.warning("Matching A record has multiple address values.")
+		logging.warning("Only the first one will be considered.")
+	return addresses[0]["Value"]
 
 def get_public_ip():
 	http = urllib3.PoolManager()
 	r = http.request("GET", "http://ip.42.pl/raw")
 	if r.status != 200:
-		raise Exception("Failed to get public IP.")
-	try:
-		return r.data.decode("utf-8")
-	except UnicodeError:
-		raise Exception("Failed to decode response.")
+		raise Exception("Bad response code: {0}".format(r.status))
+	return r.data.decode("utf-8")
 
 def update_record(domain, zone_id, old_ip, new_ip):
 	change_query = json.dumps({
@@ -62,87 +75,64 @@ def update_record(domain, zone_id, old_ip, new_ip):
 			}
 		]
 	})
-	out, err = Popen(
+	info = get_json(
 		['aws', 'route53', 'change-resource-record-sets',
-		'--hosted-zone-id', zone_id, '--change-batch', change_query],
-		stdout=subprocess.PIPE, stderr=subprocess.PIPE
-	).communicate()
-	info = json.loads(out.decode("utf-8"))
+		'--hosted-zone-id', zone_id, '--change-batch', change_query]
+	)
+	
+	if not "ChangeInfo" in info:
+		raise Exception("No key {0} in response: {1}".format("ChangeInfo", info))
+	for key in ["Status", "Id"]:
+		if not key in info["ChangeInfo"]:
+			raise Exception("No key {0} in change info: {1}".
+				format(key, info["ChangeInfo"]))
 	return (info["ChangeInfo"]["Status"] == "INSYNC", info["ChangeInfo"]["Id"])
 
-def is_change_committed(change_id):
-	out, err = Popen(
-		['aws', 'route53', 'get-change', '--id', change_id],
-		stdout=subprocess.PIPE, stderr=subprocess.PIPE
-	).communicate()
-	info = json.loads(out.decode("utf-8"))
+def change_committed(change_id):
+	info = get_json(['aws', 'route53', 'get-change', '--id', change_id])
+
+	if not "ChangeInfo" in info:
+		raise Exception("No key {0} in response: {1}".format("ChangeInfo", info))
+	for key in ["Status", "Id"]:
+		if not key in info["ChangeInfo"]:
+			raise Exception("No key {0} in change info: {1}".
+				format(key, info["ChangeInfo"]))
 	return info["ChangeInfo"]["Status"] == "PENDING" 
 
-def initialize(domain, zone_id):
-	try:
-		set_ip = get_set_ip(domain, zone_id)
-	except Exception as e:
-		logging.warning("Failed to look up A record: " + str(e))
-		return
-	try:
-		cur_ip = get_public_ip()
-	except Exception as e:
-		logging.critical("Failed getting public IP: " + str(e))
-		return
+def get_status(domain, zone_id):
+	set_ip = get_set_ip(domain, zone_id)
+	cur_ip = get_public_ip()
 	logging.info("Current address associated with domain: " + set_ip)
 	logging.info("Current public IP address: " + cur_ip)
 
 	if set_ip != cur_ip:
-		try:
-			change_id = update_record(domain, zone_id, set_ip, cur_ip)
-			change_pending = True
-			logging.info("Successfully updated record.")
-		except Exception as e:
-			logging.warning("Failed to update record: " + str(e))
-			return
+		change_id = update_record(domain, zone_id, set_ip, cur_ip)[1]
+		change_pending = True
+		logging.info("Successfully updated record.")
 	else:
 		change_id = ""
 		change_pending = False
 	return (set_ip, cur_ip, change_pending, change_id)
 
-def main():
-	logging.basicConfig(filename="/var/log/aws_ip_sync.log", filemode="w", level=logging.DEBUG)
-	try:
-		config = json.load(open("/etc/default/aws_ip_sync.json"))
-	except IOError as e:
-		logging.critical(str(e))
-		return
-	except Exception as e:
-		logging.critical("Error parsing configuration file: " + str(e))
-		return
-
-	try:
-		domain = config["domain-name"]
-		zone_id = config["hosted-zone-id"]
-	except KeyError as e:
-		logging.critical("Missing configuration parameter.")
-
-	if not domain.endswith("."):
-		logging.critical("Value for \"domain-name\" does not end with \".\"")
-		return
-
+def start(domain, zone_id):
 	while True:
-		status = initialize(domain, zone_id)
-		if status is not None:
+		try:
+			status = get_status(domain, zone_id)
 			break
-		else:
-			logging.warning("Initialization failed.")
+		except Exception as e:
+			logging.warning("Failed to get initial status: {0}".format(e))
+			logging.warning(traceback.format_exc())
 			logging.warning("Next attempt in 10 seconds.")
 			time.sleep(10)
 
-	set_ip = status[0]
-	cur_ip = status[1]
-	change_pending = status[2]
-	change_id = status[3]
+	(set_ip, cur_ip, change_pending, change_id) = status
 	logging.info("Initialization successful.")
 
 	while True:
-		time.sleep(300)
+		time.sleep(10)
+
+		# If we already have a pending change, wait for it to commit
+		# before making another request.
 		if change_pending:
 			try:
 				if not change_committed(change_id):
@@ -150,17 +140,25 @@ def main():
 					logging.info("Next check in 5 minutes.")
 					continue
 				else:
+					logging.info("Previous change committed.")
 					change_pending = False
 					set_ip = cur_ip
 			except Exception as e:
-				logging.warning("Failed to get change status: " + e);
+				logging.warning("Failed to get change status: {0}".format(e))
+				logging.warning(traceback.format_exc())
 				logging.warning("Next attempt in 5 minutes.")
 				continue
+
+		# Try to get the public IP.
 		try:
 			cur_ip = get_public_ip()
 		except Exception as e:
-			logging.warning("Failed to get public IP: " + e);
+			logging.warning("Failed to get public IP: {0}".format(e))
+			logging.warning(traceback.format_exc())
 			logging.warning("Next attempt in 5 minutes.")
+			continue
+
+		# Try to update the public IP.
 		if set_ip != cur_ip:
 			try:
 				change_id = update_record(domain, zone_id, set_ip, cur_ip)
@@ -168,16 +166,46 @@ def main():
 				logging.info("Successfully updated record.")
 				logging.info("Next check in 5 minutes.")
 			except Exception as e:
-				logging.warning("Failed to update record: " + str(e))
+				logging.warning("Failed to update record: {0}".format(e))
+				logging.warning(traceback.format_exc())
 				logging.warning("Next attempt in 5 minutes.")
 				continue
 		else:
 			logging.info("Public IP has not changed.")
 			logging.info("Next check in 5 minutes.")
 
-class my_daemon(daemon):
+class aws_dns_service(service):
+	def __init__(self):
+		super(aws_dns_service, self).__init__("aws_dns", pidfile, logfile)
+		self.terminating = False
+		
 	def run(self):
-		main()
+		logging.basicConfig(stream=self.log, level=logging.INFO)
 
-d = my_daemon("/var/run/aws_ip_sync.pid")
-d.start()
+		try:
+			config = json.load(open(conf_file))
+		except Exception as e:
+			logging.critical("Error parsing configuration file: {0}".format(e))
+			self.log_status(False)
+			sys.exit(1)
+
+		for key in ["domain-name", "hosted-zone-id"]:
+			if not key in config:
+				logging.critical("Configuration missing key \"{0}\"".format(key))
+				self.log_status(False)
+				sys.exit(1)
+
+		(domain, zone_id) = (config["domain-name"], config["hosted-zone-id"])
+		if not domain.endswith("."):
+			logging.critical("Value for \"domain-name\" does not end with \".\"")
+			self.log_status(False)
+			sys.exit(1)
+
+		self.log_status(True)
+		start(domain, zone_id)
+
+	def terminate(self):
+		self.log.close()
+		sys.exit(0)
+	
+aws_dns_service().start()
