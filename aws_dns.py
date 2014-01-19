@@ -12,10 +12,11 @@ from subprocess import Popen, PIPE
 sys.path.append("/Users/aditya/projects/utility/python_service")
 from system_v import service
 
-base_dir  = os.path.abspath(".")
-pidfile   = os.path.join(base_dir, "dat/aws_dns.pid")
-logfile   = os.path.join(base_dir, "dat/aws_dns.log")
-conf_file = os.path.join(base_dir, "dat/aws_dns.json")
+service_path = "/etc/init.d/aws_dns"
+base_dir     = os.path.abspath(".")
+pidfile      = os.path.join(base_dir, "dat/aws_dns.pid")
+logfile      = os.path.join(base_dir, "dat/aws_dns.log")
+conf_file    = os.path.join(base_dir, "dat/aws_dns.json")
 
 def get_json(cmd):
 	out, err = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()
@@ -176,7 +177,7 @@ def start(domain, zone_id):
 
 class aws_dns_service(service):
 	def __init__(self):
-		super(aws_dns_service, self).__init__("aws_dns", pidfile, logfile)
+		super(aws_dns_service, self).__init__(service_path, pidfile, logfile)
 		self.terminating = False
 		
 	def run(self):
@@ -208,4 +209,14 @@ class aws_dns_service(service):
 		self.log.close()
 		sys.exit(0)
 	
-aws_dns_service().start()
+s = aws_dns_service()
+r = {
+	"start"        : s.start,
+	"stop"         : s.stop,
+	"restart"      : s.restart,
+	"try-restart"  : s.try_restart,
+	"reload"       : s.reload,
+	"force-reload" : s.force_reload,
+	"status"       : s.status
+}.get(sys.argv[1] if len(sys.argv) > 1 else "usage", s.usage)()
+sys.exit(r)

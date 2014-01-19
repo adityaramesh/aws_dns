@@ -1,5 +1,7 @@
+*.DS_Store
 *.pid
 *.log
 *.old
 *.swp
 dat/*
+__pycache__

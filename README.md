@@ -19,9 +19,13 @@ daemon.
 
 # TODO
 
-  - Better exception handling.
   - Use `RotatingFileHander` to limit the size of the log files.
-  - Make configuration parameter for sleep time.
+  - Make configuration parameters for:
+    - sleep time
+    - start time
+    - stop time
+  - Dependency checking.
+  - Installation script.
 
 # Obtaining Your Credentials
 
