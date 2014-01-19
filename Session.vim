@@ -68,9 +68,9 @@ set shortmess=aoO
 badd +3 aws_dns.py
 badd +0 install.py
 badd +1 system_v.py
-badd +0 README.md
+badd +6 README.md
 args ~/projects/utility/aws_dns/aws_dns.py
-edit README.md
+edit aws_dns.py
 set splitbelow splitright
 wincmd _ | wincmd |
 vsplit
@@ -82,12 +82,6 @@ set winheight=1 winwidth=1
 exe 'vert 1resize ' . ((&columns * 101 + 102) / 204)
 exe 'vert 2resize ' . ((&columns * 102 + 102) / 204)
 argglobal
-nnoremap <buffer> <silent> [] :call b:Markdown_MoveToPreviousSiblingHeader()
-nnoremap <buffer> <silent> [[ :call b:Markdown_MoveToPreviousHeader()
-nnoremap <buffer> <silent> ]c :call b:Markdown_MoveToCurHeader()
-nnoremap <buffer> <silent> ]u :call b:Markdown_MoveToParentHeader()
-nnoremap <buffer> <silent> ][ :call b:Markdown_MoveToNextSiblingHeader()
-nnoremap <buffer> <silent> ]] :call b:Markdown_MoveToNextHeader()
 setlocal keymap=
 setlocal noarabic
 setlocal autoindent
@@ -96,12 +90,12 @@ setlocal bufhidden=
 setlocal buflisted
 setlocal buftype=
 setlocal nocindent
-setlocal cinkeys=0{,0},0),:,0#,!^F,o,O,e
+setlocal cinkeys=0{,0},0),:,!^F,o,O,e
 setlocal cinoptions=
 setlocal cinwords=if,else,while,do,for,switch
 setlocal colorcolumn=
-setlocal comments=s0:<!--,mb:\ \ **,ex:-->
-setlocal commentstring=/*%s*/
+setlocal comments=s1:/*,mb:*,ex:*/,://,b:#,:XCOMM,n:>,fb:-
+setlocal commentstring=#%s
 setlocal complete=.,w,b,u,t,i
 set concealcursor=vin
 setlocal concealcursor=vin
@@ -120,8 +114,8 @@ setlocal nodiff
 setlocal equalprg=
 setlocal errorformat=
 setlocal noexpandtab
-if &filetype != 'mkd'
-setlocal filetype=mkd
+if &filetype != 'python'
+setlocal filetype=python
 endif
 setlocal foldcolumn=0
 setlocal foldenable
@@ -134,15 +128,15 @@ setlocal foldminlines=1
 setlocal foldnestmax=20
 setlocal foldtext=foldtext()
 setlocal formatexpr=
-setlocal formatoptions=tcqo2r
+setlocal formatoptions=tcqor2
 setlocal formatlistpat=^\\s*\\d\\+[\\]:.)}\\t\ ]\\s*
 setlocal grepprg=
 setlocal iminsert=0
 setlocal imsearch=0
-setlocal include=
-setlocal includeexpr=
+setlocal include=s*\\(from\\|import\\)
+setlocal includeexpr=substitute(v:fname,'\\.','/','g')
 setlocal indentexpr=
-setlocal indentkeys=0{,0},:,0#,!^F,o,O,e
+setlocal indentkeys=0{,0},:,!^F,o,O,e
 setlocal noinfercase
 setlocal iskeyword=@,48-57,_,192-255
 setlocal keywordprg=
@@ -156,7 +150,7 @@ setlocal modifiable
 setlocal nrformats=octal,hex
 setlocal nonumber
 setlocal numberwidth=4
-setlocal omnifunc=
+setlocal omnifunc=pythoncomplete#Complete
 setlocal path=
 setlocal nopreserveindent
 setlocal nopreviewwindow
@@ -175,11 +169,11 @@ setlocal spellcapcheck=[.?!]\\_[\\])'\"\	\ ]\\+
 setlocal spellfile=
 setlocal spelllang=en
 setlocal statusline=
-setlocal suffixesadd=
+setlocal suffixesadd=.py
 setlocal swapfile
 setlocal synmaxcol=3000
-if &syntax != 'mkd'
-setlocal syntax=mkd
+if &syntax != 'python'
+setlocal syntax=python
 endif
 setlocal tabstop=8
 setlocal tags=
@@ -191,11 +185,11 @@ setlocal nowinfixwidth
 setlocal wrap
 setlocal wrapmargin=0
 silent! normal! zE
-let s:l = 1 - ((0 * winheight(0) + 28) / 56)
+let s:l = 3 - ((2 * winheight(0) + 28) / 56)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-1
+3
 normal! 0
 wincmd w
 argglobal
@@ -303,12 +297,12 @@ setlocal nowinfixwidth
 setlocal wrap
 setlocal wrapmargin=0
 silent! normal! zE
-let s:l = 37 - ((36 * winheight(0) + 28) / 56)
+let s:l = 43 - ((42 * winheight(0) + 28) / 56)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-37
-normal! 09|
+43
+normal! 044|
 wincmd w
 exe 'vert 1resize ' . ((&columns * 101 + 102) / 204)
 exe 'vert 2resize ' . ((&columns * 102 + 102) / 204)

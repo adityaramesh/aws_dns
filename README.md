@@ -61,15 +61,15 @@ obtained previously.
 - The default configuration is file located in `~/.aws`, so it will persist even
 if you change Python versions and download a different version of pip.
 
-# Python Packages
-
-The following packages are used by the script to run. If you do not have them
-installed, you will need to do so using `pip install`.
-
 # Installation
 
-- git clone
-- rake install
+The installation script was designed for Ubuntu-based distributions running 
+
+You can now run `install.py` as root. Keep in mind that the installation script
+was designed for Ubuntu-based distributions. If you are running an Ubuntu-based
+distribution, you should not have to do any manual configuration after running
+`install.py`. Otherwise, you will need to enable the `aws_dns` service, at the
+very least.
 
 [security_credentials]:
 https://console.aws.amazon.com/iam/home?#security_credential

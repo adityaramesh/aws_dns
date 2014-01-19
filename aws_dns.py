@@ -20,7 +20,7 @@ from subprocess import Popen, PIPE
 sys.path.append("/usr/lib/python_service")
 pidfile   = "/var/run/aws_dns.pid"
 logfile   = "/var/log/aws_dns.log"
-conf_file = "/etc/conf/aws_dns.conf"
+conf_file = "/etc/aws_dns.conf"
 
 from system_v import service
 

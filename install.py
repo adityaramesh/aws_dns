@@ -35,14 +35,13 @@ if not "Debian" in dist and not "Ubuntu" in dist:
 	log_info("If you have time, please submit a ticket or patch. Thanks!")
 	debian = False
 
-for dir in ["/etc", "/etc/conf", "/usr/lib", "/var/log", "/var/run"]:
+for dir in ["/etc", "/usr/lib", "/var/log", "/var/run"]:
 	if not os.path.exists(dir):
 		log_failure("The directory \"{0}\" does not exist.".format(dir))
 		sys.exit(1)
 
-for file in ["/etc/aws_dns", "/etc/conf/aws_dns.conf",
-	"/usr/lib/python_service", "/var/run/aws_dns.pid",
-	"/var/log/aws_dns.log"]:
+for file in ["/etc/aws_dns", "/etc/aws_dns.conf", "/usr/lib/python_service",
+	"/var/run/aws_dns.pid", "/var/log/aws_dns.log"]:
 	if os.path.exists(file):
 		log_failure("The file \"{0}\" already exists.".format(file))
 		log_info("To uninstall a previous installation, run "
@@ -52,7 +51,7 @@ for file in ["/etc/aws_dns", "/etc/conf/aws_dns.conf",
 try:
 	os.mkdirs("/usr/lib/python_service")
 	shutil.copy("system_v.py", "/usr/lib/python_service")
-	shutil.copy("dat/aws_dns.conf", "/etc/conf")
+	shutil.copy("dat/aws_dns.conf", "/etc")
 except OSError as e:
 	print("{0}Error:{1} installation failed: {0}.".
 		format(Fore.RED, Fore.RESET, e))
