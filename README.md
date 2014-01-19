@@ -19,7 +19,6 @@ daemon.
 
 # TODO
 
-  - Use `RotatingFileHander` to limit the size of the log files.
   - Make configuration parameters for:
     - sleep time
     - start time
