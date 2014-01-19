@@ -3,6 +3,7 @@
 import os
 import sys
 import shutil
+from glob import glob
 from colorama import Fore
 from subprocess import Popen, PIPE
 
@@ -24,41 +25,40 @@ if os.geteuid() != 0:
 
 dist, _ = Popen(["uname", "-a"], stdout=PIPE, stderr=PIPE).communicate()
 dist = dist.decode("utf-8")
-debian = True
 if not "Debian" in dist and not "Ubuntu" in dist:
-	log_warning("This uninstallation script was designed for Debian-based "
+	log_error("This installation script was designed for Debian-based "
 		"GNU/Linux distributions.")
-	log_info("If you did a manual installation, you may need to check "
-		"for additional files.")
-	log_info("Please pay attention to the output; you will need to do "
-		"some things manually.")
-	log_info("Please consult README.md after installation to make sure "
-		"everything works.")
+	log_info("You will need to proceed with the installation manually.")
+	log_info("Please consult README.md for more details.")
 	log_info("If you have time, please submit a ticket or patch. Thanks!")
-	debian = False
+	sys.exit(1)
+
+out, err = Popen("service aws_dns stop", shell=True, stdout=PIPE,
+	stderr=PIPE).communicate()
+if len(err) != 0 and "unrecognized service" not in err.decode("utf-8"):
+	log_failure("Failed to stop \"aws_dns\" service.")
+	log_info("You will need to stop the service manually.")
+	sys.exit(1)
 
 try:
 	if os.path.exists("/usr/lib/python_service"):
 		shutil.rmtree("/usr/lib/python_service")
-	for file in ["/var/run/aws_dns.pid", "/var/log/aws_dns.log",
-		"/etc/aws_dns.conf"]:
+	for file in [
+		"/etc/init.d/aws_dns",
+		"/etc/aws_dns.conf",
+		"/var/run/aws_dns.pid",
+	]:
 		if os.path.exists(file):
 			os.remove(file)
+	for file in glob("/var/log/aws_dns.log*"):
+		os.remove(file)
 except Exception as e:
-	log_warning("Error during installation: {0}".format(e))
+	log_warning("Error during uninstallation: {0}".format(e))
 	
-if debian:
-	for cmd in ["update-rc.d aws_dns disable",
-		"update-rc.d aws_dns remove"]:
-		out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
-		if len(err) != 0:
-			log_failure("Command \"{0}\" failed: \"{1}\"".
-				format(cmd, err.decode("utf-8")))
-			log_info("You will need to disable the \"aws_dns\" "
-				"service yourself.")
-			sys.exit(1)
-else:
-	log_success("Uninstallation complete.")
-	log_info("However, you need to disable the \"aws_dns\" service yourself.")
-
+for cmd in ["update-rc.d aws_dns remove"]:
+	out, err = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE).communicate()
+	if len(err) != 0:
+		log_failure("Command \"{0}\" failed: \"{1}\"".format(cmd,
+			err.decode("utf-8").strip()))
+		sys.exit(1)
 log_success("Uninstallation complete.")

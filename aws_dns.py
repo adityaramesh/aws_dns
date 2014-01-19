@@ -1,5 +1,14 @@
 #! /usr/bin/env python3
 
+### BEGIN INIT INFO                                                                                                                                                                                 
+# Provides:          aws_dns
+# Required-Start:    $network $time $local_fs $syslog
+# Required-Stop:     $network $time $local_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: DynDNS functionality for AWS.
+### END INIT INFO
+
 import os
 import sys
 import time
@@ -18,9 +27,10 @@ from subprocess import Popen, PIPE
 #conf_file    = os.path.join(base_dir, "dat/aws_dns.conf")
 
 sys.path.append("/usr/lib/python_service")
-pidfile   = "/var/run/aws_dns.pid"
-logfile   = "/var/log/aws_dns.log"
-conf_file = "/etc/aws_dns.conf"
+service_path = "/etc/init.d/aws_dns"
+pidfile      = "/var/run/aws_dns.pid"
+logfile      = "/var/log/aws_dns.log"
+conf_file    = "/etc/aws_dns.conf"
 
 from system_v import service
 
@@ -230,7 +240,7 @@ class aws_dns_service(service):
 
 		if "recheck-time" in config:
 			recheck = config["recheck-time"]
-			if type(recheck) != float:
+			if not (type(recheck) == float or type(recheck) == int):
 				logging.critical("Recheck time must be a number.")
 				self.log_status(False)
 				sys.exit(1)
