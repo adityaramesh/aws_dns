@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 
 import os
 import sys
@@ -10,14 +10,19 @@ import json
 import urllib3
 from subprocess import Popen, PIPE
 
-sys.path.append("/Users/aditya/projects/utility/python_service")
-from system_v import service
+#sys.path.append("###/python_service")
+#service_path = "/etc/init.d/aws_dns"
+#base_dir     = os.path.abspath(".")
+#pidfile      = os.path.join(base_dir, "dat/aws_dns.pid")
+#logfile      = os.path.join(base_dir, "dat/aws_dns.log")
+#conf_file    = os.path.join(base_dir, "dat/aws_dns.json")
 
-service_path = "/etc/init.d/aws_dns"
-base_dir     = os.path.abspath(".")
-pidfile      = os.path.join(base_dir, "dat/aws_dns.pid")
-logfile      = os.path.join(base_dir, "dat/aws_dns.log")
-conf_file    = os.path.join(base_dir, "dat/aws_dns.json")
+sys.path.append("/usr/lib/python_service")
+pidfile   = "/var/run/aws_dns.pid"
+logfile   = "/var/log/aws_dns.log"
+conf_file = "/etc/conf/aws_dns.conf"
+
+from system_v import service
 
 def get_json(cmd):
 	logger = logging.getLogger("aws_dns")
@@ -29,7 +34,8 @@ def get_json(cmd):
 
 def get_set_ip(domain, zone_id):
 	logger = logging.getLogger("aws_dns")
-	res = get_json(['aws', 'route53', 'list-resource-record-sets', '--hosted-zone-id', zone_id])
+	res = get_json(['aws', 'route53', 'list-resource-record-sets',
+		'--hosted-zone-id', zone_id, '--output', 'json'])
 	sets = res["ResourceRecordSets"]
 	try:
 		l = list(filter(lambda r: r["Type"] == "A" and r["Name"] == domain, sets))
@@ -81,7 +87,8 @@ def update_record(domain, zone_id, old_ip, new_ip):
 	})
 	info = get_json(
 		['aws', 'route53', 'change-resource-record-sets',
-		'--hosted-zone-id', zone_id, '--change-batch', change_query]
+		'--hosted-zone-id', zone_id, '--change-batch', change_query,
+		'--output', 'json']
 	)
 	
 	if not "ChangeInfo" in info:
@@ -93,7 +100,8 @@ def update_record(domain, zone_id, old_ip, new_ip):
 	return (info["ChangeInfo"]["Status"] == "INSYNC", info["ChangeInfo"]["Id"])
 
 def change_committed(change_id):
-	info = get_json(['aws', 'route53', 'get-change', '--id', change_id])
+	info = get_json(['aws', 'route53', 'get-change', '--id', change_id,
+		'--output', 'json'])
 
 	if not "ChangeInfo" in info:
 		raise Exception("No key {0} in response: {1}".format("ChangeInfo", info))

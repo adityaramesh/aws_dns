@@ -9,18 +9,30 @@
 
 If you use AWS, `aws_dns` essentially gives you DynDNS for free.
 
-`aws_dns` is a daemon that periodically checks the public IP address of the host
-machine, and pushes the address to an A record for a hosted zone. This allows
-you to tie an SSH server behind a dynamic IP to a domain name like
+`aws_dns` is a service that periodically checks the public IP address of the
+host machine, and pushes the address to an A record for a hosted zone. This
+allows you to tie an SSH server behind a dynamic IP to a domain name like
 `bob.example.com`.
 
 This rest of this document describes how to set up your machine to run the
-daemon.
+service.
 
 # TODO
 
-  - Dependency checking.
   - Installation script.
+  - Dependency checking. (If you know how to write `setup.py` to check for the
+  necessary libraries, please let me know. I have not had time to go through the
+  documentation to figure out which fields to fill out with what.)
+
+# Python Dependencies
+
+This service requires a Python 3 interpreter, along with the Python package
+manager `pip`. The following packages are not included in the default Python 3
+distribution, so if you do not have them installed, you should do so using `pip
+install`:
+
+  - `colorama`
+  - `urllib3`
 
 # Obtaining Your Credentials
 
