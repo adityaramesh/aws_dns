@@ -65,11 +65,11 @@ if expand('%') == '' && !&modified && line('$') <= 1 && getline(1) == ''
   let s:wipebuf = bufnr('%')
 endif
 set shortmess=aoO
-badd +3 aws_dns.py
-badd +0 install.py
-badd +1 system_v.py
-badd +6 README.md
-args ~/projects/utility/aws_dns/aws_dns.py
+badd +43 install.py
+badd +0 uninstall.py
+badd +1 aws_dns.conf
+badd +0 aws_dns.py
+args ~/projects/utility/aws_dns/install.py
 edit aws_dns.py
 set splitbelow splitright
 wincmd _ | wincmd |
@@ -185,15 +185,15 @@ setlocal nowinfixwidth
 setlocal wrap
 setlocal wrapmargin=0
 silent! normal! zE
-let s:l = 3 - ((2 * winheight(0) + 28) / 56)
+let s:l = 1 - ((0 * winheight(0) + 28) / 56)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-3
+1
 normal! 0
 wincmd w
 argglobal
-edit install.py
+edit uninstall.py
 setlocal keymap=
 setlocal noarabic
 setlocal autoindent
@@ -297,12 +297,12 @@ setlocal nowinfixwidth
 setlocal wrap
 setlocal wrapmargin=0
 silent! normal! zE
-let s:l = 43 - ((42 * winheight(0) + 28) / 56)
+let s:l = 38 - ((37 * winheight(0) + 28) / 56)
 if s:l < 1 | let s:l = 1 | endif
 exe s:l
 normal! zt
-43
-normal! 044|
+38
+normal! 0
 wincmd w
 exe 'vert 1resize ' . ((&columns * 101 + 102) / 204)
 exe 'vert 2resize ' . ((&columns * 102 + 102) / 204)

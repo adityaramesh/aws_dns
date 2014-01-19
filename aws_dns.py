@@ -15,7 +15,7 @@ from subprocess import Popen, PIPE
 #base_dir     = os.path.abspath(".")
 #pidfile      = os.path.join(base_dir, "dat/aws_dns.pid")
 #logfile      = os.path.join(base_dir, "dat/aws_dns.log")
-#conf_file    = os.path.join(base_dir, "dat/aws_dns.json")
+#conf_file    = os.path.join(base_dir, "dat/aws_dns.conf")
 
 sys.path.append("/usr/lib/python_service")
 pidfile   = "/var/run/aws_dns.pid"
