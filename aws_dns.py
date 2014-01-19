@@ -119,7 +119,7 @@ def get_status(domain, zone_id):
 		change_pending = False
 	return (set_ip, cur_ip, change_pending, change_id)
 
-def start(domain, zone_id):
+def start(domain, zone_id, recheck):
 	logger = logging.getLogger("aws_dns")
 
 	while True:
@@ -136,7 +136,7 @@ def start(domain, zone_id):
 	logger.info("Initialization successful.")
 
 	while True:
-		time.sleep(10)
+		time.sleep(recheck)
 
 		# If we already have a pending change, wait for it to commit
 		# before making another request.
@@ -187,6 +187,7 @@ class aws_dns_service(service):
 		self.terminating = False
 		
 	def run(self):
+		# Set up the logging.
 		fmt = "%(asctime)s :: %(levelname)s :: %(funcName)s, line %(lineno)s :: %(message)s"
 		logger = logging.getLogger("aws_dns")
 		logger.setLevel(logging.INFO)
@@ -195,6 +196,7 @@ class aws_dns_service(service):
 		h.setFormatter(f)
 		logger.addHandler(h)
 
+		# Parse the configuration.
 		try:
 			config = json.load(open(conf_file))
 		except Exception as e:
@@ -209,13 +211,30 @@ class aws_dns_service(service):
 				sys.exit(1)
 
 		(domain, zone_id) = (config["domain-name"], config["hosted-zone-id"])
-		if not domain.endswith("."):
-			logger.critical("Value for \"domain-name\" does not end with \".\"")
+
+		if type(domain) != str or type(zone_id) != str:
+			logging.critical("Domain and hosted zone ID must be strings.")
 			self.log_status(False)
 			sys.exit(1)
 
+		if not domain.endswith("."):
+			domain += "."
+
+		if "recheck-time" in config:
+			recheck = config["recheck-time"]
+			if type(recheck) != float:
+				logging.critical("Recheck time must be a number.")
+				self.log_status(False)
+				sys.exit(1)
+			if recheck <= 0:
+				logging.critical("Recheck time must be positive.")
+				self.log_status(False)
+				sys.exit(1)
+		else:
+			recheck = 300
+
 		self.log_status(True)
-		start(domain, zone_id)
+		start(domain, zone_id, recheck)
 
 	def terminate(self):
 		self.log.close()

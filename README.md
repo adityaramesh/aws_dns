@@ -19,10 +19,6 @@ daemon.
 
 # TODO
 
-  - Make configuration parameters for:
-    - sleep time
-    - start time
-    - stop time
   - Dependency checking.
   - Installation script.
 
