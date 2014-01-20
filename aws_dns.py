@@ -33,9 +33,8 @@ def get_json(cmd):
 	logger = logging.getLogger("aws_dns")
 	out, err = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()
 	if len(err) != 0:
-		logger.critical("Command {0} reported error: {1}".
+		logger.warning("Command {0} reported error: {1}".
 			format(cmd, err.decode("utf-8")))
-		sys.exit(1)
 	return json.loads(out.decode("utf-8"))
 
 def get_set_ip(domain, zone_id):
@@ -209,6 +208,7 @@ class aws_dns_service(service):
 		f = logging.Formatter(fmt)
 		h.setFormatter(f)
 		logger.addHandler(h)
+		logger.info("Starting service.")
 
 		# Parse the configuration.
 		try:
@@ -251,7 +251,8 @@ class aws_dns_service(service):
 		start(domain, zone_id, recheck)
 
 	def terminate(self, signum, frame):
-		self.log.close()
+		logger = logging.getLogger("aws_dns")
+		logger.info("Stopping service.")
 		sys.exit(0)
 	
 s = aws_dns_service()
