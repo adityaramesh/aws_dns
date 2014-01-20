@@ -51,8 +51,11 @@ tool called `aws`.
 
 - Install pip for Python 3.
 - Install awscli using pip.
-- After installation, type `aws configure`, and enter the credentials that you
-obtained previously.
+- After installation, **log in as root**, type `aws configure`, and enter the
+  credentials that you obtained previously. Since the service will be started by
+  root, the AWS configuration needs to be associated with root. You can also
+  type `aws configure` using your account if you wish to use the `aws` utility
+  locally.
 
 # Getting Started
 
