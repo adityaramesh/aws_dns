@@ -50,14 +50,14 @@ The easiest way to use the Route 53 API is by means of Amazon's command-line
 tool called `aws`.
 
 - Install pip for Python 3.
-- Install awscli using pip.
+- Install `awscli` using pip.
 - After installation, **log in as root**, type `aws configure`, and enter the
   credentials that you obtained previously. Since the service will be started by
   root, the AWS configuration needs to be associated with root. You can also
   type `aws configure` using your account if you wish to use the `aws` utility
   locally.
 
-# Getting Started
+# Getting Started with AWS CLI
 
 - You may want to read the [AWS CLI guide][aws_cli] if you would like to use it
   yourself.
@@ -66,13 +66,44 @@ if you change Python versions and download a different version of pip.
 
 # Installation
 
-The installation script was designed for Ubuntu-based distributions running 
+Before installation, edit the file `aws_dns.conf`, and replace the "domain-name"
+and "hosted-zone-id" fields with the desired values. For example, if you wish to
+associate your machine with the domain name `bob.example.com`, then you would
+need to do the following:
 
-You can now run `install.py` as root. Keep in mind that the installation script
-was designed for Ubuntu-based distributions. If you are running an Ubuntu-based
-distribution, you should not have to do any manual configuration after running
-`install.py`. Otherwise, you will need to enable the `aws_dns` service, at the
-very least.
+  - Log into the Route 53 service using the AWS Management Console.
+  - Obtain the hosted zone ID corresponding to the domain `example.com`.
+  - Replace the `domain-name` field with `bob.example.com`.
+  - Replace the `hosted-zone-id` field with the hosted zone ID corresponding to
+  `example.com`.
+  - Optionally change the `recheck-time` field to another value (in seconds).
+  This indicate the frequently with which the service checks for public IP
+  changes.
+
+If you are not using a Debian- or Ubuntu-based Linux distribution, please see
+the section titled "Manual Installation". Otherwise, you can now run
+`install.py` as root. To uninstall the service, run `uninstall.py` as root. Bug
+reports, patches, and requests for new features are welcome.
+
+# Manual Installation
+
+The script `install.py` and `uninstall.py` are designed for Ubuntu-based
+distributions using System V init systems. If you are using a different Linux
+distribution, you wil need to copy the following files to the proper locations:
+
+  - `aws_dns.py` (This should probably be renamed to `aws_dns` after it is
+  moved and given execute permissions.)
+  - `aws_dns.conf`
+  - `system_v.py`
+ 
+You will also need to edit the first few lines of the `aws_dns.py` script before
+moving it, so that it looks for the `system_v.py` file in the correct directory,
+looks for the configuration file in the right place, and creates the log and PID
+files in the correct directory.
+
+If you have some time, I would appreciate it if you would submit a ticket or a
+patch with these changes, so that the installation process works automatically
+for your distribution in the future. Thanks!
 
 [security_credentials]:
 https://console.aws.amazon.com/iam/home?#security_credential
