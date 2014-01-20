@@ -25,7 +25,7 @@ if os.geteuid() != 0:
 dist, _ = Popen(["uname", "-a"], stdout=PIPE, stderr=PIPE).communicate()
 dist = dist.decode("utf-8")
 if not "Debian" in dist and not "Ubuntu" in dist:
-	log_error("This installation script was designed for Debian-based "
+	log_failure("This installation script was designed for Debian-based "
 		"GNU/Linux distributions.")
 	log_info("You will need to proceed with the installation manually.")
 	log_info("Please consult README.md for more details.")
