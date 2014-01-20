@@ -354,7 +354,7 @@ class service:
 	Called when `SIGTERM` is sent to the daemon. The derived class will
 	likely need to override this method.
 	"""
-	def terminate(self, signum, frame)
+	def terminate(self, signum, frame):
 		self.log.close()
 
 	"""
