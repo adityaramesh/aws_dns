@@ -3,7 +3,7 @@
 ### BEGIN INIT INFO                                                                                                                                                                                 
 # Provides:          aws_dns
 # Required-Start:    $network $time $local_fs $syslog
-# Required-Stop:     $network $time $local_fs $syslog
+# Required-Stop:     $time $local_fs $syslog
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
 # Short-Description: DynDNS functionality for AWS.
@@ -19,19 +19,14 @@ import json
 import urllib3
 from subprocess import Popen, PIPE
 
-#sys.path.append("###/python_service")
-#service_path = "/etc/init.d/aws_dns"
-#base_dir     = os.path.abspath(".")
-#pidfile      = os.path.join(base_dir, "dat/aws_dns.pid")
-#logfile      = os.path.join(base_dir, "dat/aws_dns.log")
-#conf_file    = os.path.join(base_dir, "dat/aws_dns.conf")
-
 sys.path.append("/usr/lib/python_service")
+aws_path     = "/usr/local/bin"
 service_path = "/etc/init.d/aws_dns"
 pidfile      = "/var/run/aws_dns.pid"
 logfile      = "/var/log/aws_dns.log"
 conf_file    = "/etc/aws_dns.conf"
 
+os.environ["PATH"] += os.path.pathsep + aws_path
 from system_v import service
 
 def get_json(cmd):
