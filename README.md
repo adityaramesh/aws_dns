@@ -77,7 +77,7 @@ need to do the following:
   - Replace the `hosted-zone-id` field with the hosted zone ID corresponding to
   `example.com`.
   - Optionally change the `recheck-time` field to another value (in seconds).
-  This indicate the frequently with which the service checks for public IP
+  This indicates the frequency with which the service checks for public IP
   changes.
 
 If you are not using a Debian- or Ubuntu-based Linux distribution, please see
@@ -89,7 +89,7 @@ reports, patches, and requests for new features are welcome.
 
 The script `install.py` and `uninstall.py` are designed for Ubuntu-based
 distributions using System V init systems. If you are using a different Linux
-distribution, you wil need to copy the following files to the proper locations:
+distribution, you will need to copy the following files to the proper locations:
 
   - `aws_dns.py` (This should probably be renamed to `aws_dns` after it is
   moved and given execute permissions.)
