@@ -26,6 +26,6 @@ DEALINGS IN THE SOFTWARE.
 
 # A Request from the Author
 
-If you find this software useful, I would appreciate it if you would provide a
-link to the the original repository for the software, in some place in your
-project that you think is appropriate.
+If you find this software useful and use it in another project, I would
+appreciate it if you would provide a link to the the original repository for
+this software, in some place in your project that you think is appropriate.
